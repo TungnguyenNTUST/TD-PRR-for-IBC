@@ -9,6 +9,7 @@ For pre-computed LUT evaluation, use Bayesian_Optimization_APP.py.
 from __future__ import annotations
 
 import os
+import pickle
 from typing import Dict, Optional, Sequence, Set, Tuple
 
 import numpy as np
@@ -103,6 +104,8 @@ def run_near_optimal_screening(
     q1_map: Dict[int, str] = None,
     q2_map: Dict[int, str] = None,
     q3_map: Dict[int, str] = None,
+    history_rows: Optional[list] = None,
+    pkl_path: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Screening loop using constant kappa (Paper 01 mode).
@@ -113,11 +116,13 @@ def run_near_optimal_screening(
     Stops when Xp is empty (no unobserved candidate can plausibly match the best).
     On stop, saves GP posterior (mu, std) to OUT_MU_STD.
     """
-    history_rows = []
+    if history_rows is None:
+        history_rows = []
     new_obs = []
+    start_step = len(history_rows) + 1
 
     try:
-        for step in range(1, max_steps + 1):
+        for step in range(start_step, max_steps + 1):
             Xp, mu_all, std_all = bo.compute_Xp_candidates(
                 eps=eps,
                 use_ucb=True,
@@ -178,6 +183,14 @@ def run_near_optimal_screening(
                 f"best={row['best']:.6g} target={row['target']:.6g} "
                 f"|Xp|={len(Xp)} kappa={kappa_screen:.4g}"
             )
+
+            # Save checkpoint after each step
+            if pkl_path:
+                try:
+                    with open(pkl_path, "wb") as f:
+                        pickle.dump((bo, history_rows), f)
+                except Exception as e:
+                    print(f"[WARNING] Could not save BO checkpoint: {e}")
     finally:
         if new_obs:
             append_new_observations_to_excel(FILE_PATH, "Observed", new_obs)
@@ -320,8 +333,25 @@ def main() -> None:
     lut = dict(zip(indices_obs, eff_obs))
     available = set(lut.keys())
 
-    bo = build_bo(Input, kappa=1.96)
-    initialize_bo(bo, init_indices, lut, available)
+    # Check for existing checkpoint to resume
+    pkl_path = os.path.join(OUT_DIR, "bo_state.pkl")
+    bo_loaded = False
+    history_rows = None
+
+    if os.path.exists(pkl_path):
+        print(f"[RESUME] Found existing BO checkpoint at {pkl_path}")
+        try:
+            with open(pkl_path, "rb") as f:
+                bo, history_rows = pickle.load(f)
+            print(f"[RESUME] Successfully loaded checkpoint. Resuming from step {len(history_rows) + 1}.")
+            bo_loaded = True
+        except Exception as e:
+            print(f"[WARNING] Could not load checkpoint: {e}. Starting fresh.")
+
+    if not bo_loaded:
+        bo = build_bo(Input, kappa=1.96)
+        initialize_bo(bo, init_indices, lut, available)
+        history_rows = []
 
     var_names = ["Index", "MOS", "CORE", "DIO", "Freq", "Ind"]
 
@@ -348,8 +378,18 @@ def main() -> None:
         q1_map=q1_map,
         q2_map=q2_map,
         q3_map=q3_map,
+        history_rows=history_rows,
+        pkl_path=pkl_path,
     )
     hist.to_csv(os.path.join(OUT_DIR, "screening_history.csv"), index=False)
+
+    # Clean up checkpoint since it finished successfully
+    if os.path.exists(pkl_path):
+        try:
+            os.remove(pkl_path)
+            print(f"[CLEANUP] Deleted checkpoint {pkl_path} because the optimization finished successfully.")
+        except Exception as e:
+            print(f"[WARNING] Could not delete checkpoint: {e}")
 
     confirmed, predicted = summarize_near_optimal(bo, eps=EPS, kappa_screen=1.96)
     print("\nConfirmed near-optimal (observed):")

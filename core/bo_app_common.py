@@ -39,16 +39,37 @@ def load_input_and_index(
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load the GP input matrix and the full design-option index matrix.
+    Supports caching to .npy files to avoid slow Excel reads.
 
     Returns
     -------
     Input   : np.ndarray shape (D, N) -- transposed feature matrix for DiscreteBO
     Z_matrix: np.ndarray shape (N, n_vars) -- index matrix (1-based)
     """
+    dir_name = os.path.dirname(file_path)
+    input_cache = os.path.join(dir_name, f"{input_sheet}.npy")
+    index_cache = os.path.join(dir_name, f"{index_sheet}.npy")
+
+    if os.path.exists(input_cache) and os.path.exists(index_cache):
+        print(f"[CACHE] Loading Input and Z_matrix from cache ({input_sheet}.npy, {index_sheet}.npy)...")
+        Input = np.load(input_cache)
+        Z_matrix = np.load(index_cache)
+        return Input, Z_matrix
+
+    print(f"Loading {input_sheet} and {index_sheet} from Excel (this may take a few seconds)...")
     df_enc = pd.read_excel(file_path, sheet_name=input_sheet, header=0)
     df_idx = pd.read_excel(file_path, sheet_name=index_sheet, header=0)
     Input = df_enc.to_numpy(dtype=float).T        # (D, N)
     Z_matrix = df_idx.to_numpy(dtype=int)         # (N, n_vars)
+
+    # Save to cache
+    try:
+        np.save(input_cache, Input)
+        np.save(index_cache, Z_matrix)
+        print(f"[CACHE] Saved Input and Z_matrix cache as .npy files in {dir_name}")
+    except Exception as e:
+        print(f"[WARNING] Could not save cache: {e}")
+
     return Input, Z_matrix
 
 
