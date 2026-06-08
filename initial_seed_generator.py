@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
     samples = sample_group_combinations_n(
         [groups_mos, groups_core, groups_diode, groups_freq, groups_inductance],
-        s=3,
+        s=5,
         mode="B",
         require_full=True,
         id_base=0,
