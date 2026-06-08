@@ -60,6 +60,28 @@ def get_devices_from_x(
         raise ValueError(f"Device index not found: {e}") from e
 
 
+def append_new_observations_to_excel(file_path: str, sheet_name: str, new_rows: list[tuple[int, float]]):
+    """Append new simulation results to the Excel sheet to save them as cache."""
+    if not new_rows:
+        return
+    df_new = pd.DataFrame(new_rows, columns=["indices_1based", "eff_7"])
+    with pd.ExcelWriter(file_path, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
+        workbook = writer.book
+        if sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            start_row = sheet.max_row
+        else:
+            start_row = 0
+        df_new.to_excel(
+            writer,
+            sheet_name=sheet_name,
+            index=False,
+            header=(start_row == 0),
+            startrow=start_row
+        )
+    print(f"[saved] Appended {len(new_rows)} new observations to sheet '{sheet_name}' in {file_path}")
+
+
 # =========================================================
 # Near-optimal screening — UCB acquisition (standard)
 # =========================================================
@@ -74,8 +96,8 @@ def run_near_optimal_screening(
     indices_obs: np.ndarray,
     out_dir: Optional[str] = None,
     max_steps: int = 4000,
-    kappa_screen: float = 2.0,
-    policy_kappa: float = 2.0,
+    kappa_screen: float = 1.96,
+    policy_kappa: float = 1.96,
     plot_secondary: Optional[str] = "ucb",
     n_init: int = 2,
     q1_map: Dict[int, str] = None,
@@ -92,67 +114,73 @@ def run_near_optimal_screening(
     On stop, saves GP posterior (mu, std) to OUT_MU_STD.
     """
     history_rows = []
+    new_obs = []
 
-    for step in range(1, max_steps + 1):
-        Xp, mu_all, std_all = bo.compute_Xp_candidates(
-            eps=eps,
-            use_ucb=True,
-            kappa=kappa_screen,
-            available_1based=None,
-        )
-
-        if len(Xp) == 0:
-            print(f"[STOP] Xp empty at step {step}")
-            df_mu_std = pd.DataFrame({"Mu": mu_all, "Std": std_all})
-            df_mu_std.to_excel(OUT_MU_STD, index=False, engine="openpyxl")
-            print(f"[saved] {OUT_MU_STD}")
-            break
-
-        idx_next = bo.suggest_next_within_indices(Xp, policy="ucb", kappa=policy_kappa)
-
-        # --- evaluate: cache first, then live simulation ---
-        matches = (indices_obs == idx_next)
-        if matches.any():
-            y = float(eff_obs[matches][0])
-        else:
-            d = get_devices_from_x(
-                x1=int(Z_matrix[idx_next - 1, 1]),
-                x2=int(Z_matrix[idx_next - 1, 2]),
-                x3=int(Z_matrix[idx_next - 1, 3]),
-                q1_map=q1_map,
-                q2_map=q2_map,
-                q3_map=q3_map,
+    try:
+        for step in range(1, max_steps + 1):
+            Xp, mu_all, std_all = bo.compute_Xp_candidates(
+                eps=eps,
+                use_ucb=True,
+                kappa=kappa_screen,
+                available_1based=None,
             )
-            y_list = efficiency_one_desin_option(
-                MOS_PN=d["MOS"],
-                DIO_PN=d["DIO"],
-                Core_PN=d["CORE"],
-                fsw_index=int(Z_matrix[idx_next - 1, 4]),
-                ind_index=int(Z_matrix[idx_next - 1, 5]),
+
+            if len(Xp) == 0:
+                print(f"[STOP] Xp empty at step {step}")
+                df_mu_std = pd.DataFrame({"Mu": mu_all, "Std": std_all})
+                df_mu_std.to_excel(OUT_MU_STD, index=False, engine="openpyxl")
+                print(f"[saved] {OUT_MU_STD}")
+                break
+
+            idx_next = bo.suggest_next_within_indices(Xp, policy="ucb", kappa=policy_kappa)
+
+            # --- evaluate: cache first, then live simulation ---
+            matches = (indices_obs == idx_next)
+            if matches.any():
+                y = float(eff_obs[matches][0])
+            else:
+                d = get_devices_from_x(
+                    x1=int(Z_matrix[idx_next - 1, 1]),
+                    x2=int(Z_matrix[idx_next - 1, 2]),
+                    x3=int(Z_matrix[idx_next - 1, 3]),
+                    q1_map=q1_map,
+                    q2_map=q2_map,
+                    q3_map=q3_map,
+                )
+                y_list = efficiency_one_desin_option(
+                    MOS_PN=d["MOS"],
+                    DIO_PN=d["DIO"],
+                    Core_PN=d["CORE"],
+                    fsw_index=int(Z_matrix[idx_next - 1, 4]),
+                    ind_index=int(Z_matrix[idx_next - 1, 5]),
+                )
+                y = float(y_list[6])
+                new_obs.append((int(idx_next), y))
+
+            bo.tell(idx_next, y)
+
+            row = log_step(
+                bo=bo,
+                step=step,
+                idx_next=idx_next,
+                y_measured=y,
+                Z_index=Z_matrix.T,
+                var_names=var_names,
+                eps=eps,
+                Xp_size=len(Xp),
+                save_plots_dir=out_dir,
+                plot_secondary=plot_secondary,
+                n_init=n_init,
             )
-            y = float(y_list[6])
-
-        bo.tell(idx_next, y)
-
-        row = log_step(
-            bo=bo,
-            step=step,
-            idx_next=idx_next,
-            y_measured=y,
-            Z_index=Z_matrix.T,
-            var_names=var_names,
-            eps=eps,
-            Xp_size=len(Xp),
-            save_plots_dir=out_dir,
-            plot_secondary=plot_secondary,
-            n_init=n_init,
-        )
-        history_rows.append(row)
-        print(
-            f"[STEP {step:03d}] pick={idx_next} y={y:.6g} "
-            f"best={row['best']:.6g} target={row['target']:.6g} "
-            f"|Xp|={len(Xp)} kappa={kappa_screen:.4g}"
-        )
+            history_rows.append(row)
+            print(
+                f"[STEP {step:03d}] pick={idx_next} y={y:.6g} "
+                f"best={row['best']:.6g} target={row['target']:.6g} "
+                f"|Xp|={len(Xp)} kappa={kappa_screen:.4g}"
+            )
+    finally:
+        if new_obs:
+            append_new_observations_to_excel(FILE_PATH, "Observed", new_obs)
 
     return pd.DataFrame(history_rows)
 
@@ -171,7 +199,7 @@ def run_near_optimal_screening_with_EI(
     indices_obs: np.ndarray,
     out_dir: Optional[str] = None,
     max_steps: int = 4000,
-    kappa_screen: float = 2.0,
+    kappa_screen: float = 1.96,
     xi: float = 0.01,
     plot_secondary: Optional[str] = "ei",
     n_init: int = 2,
@@ -189,6 +217,7 @@ def run_near_optimal_screening_with_EI(
     explicit parameters instead of being used before assignment.
     """
     history_rows = []
+    new_obs = []
     # temporarily switch bo to EI mode for suggestions
     original_ei_acq = bo.ei_acq
     original_xi = bo.xi
@@ -238,6 +267,7 @@ def run_near_optimal_screening_with_EI(
                     ind_index=int(Z_matrix[idx_next - 1, 5]),
                 )
                 y = float(y_list[6])
+                new_obs.append((int(idx_next), y))
 
             bo.tell(idx_next, y)
 
@@ -263,6 +293,8 @@ def run_near_optimal_screening_with_EI(
         # restore bo acquisition settings
         bo.ei_acq = original_ei_acq
         bo.xi = original_xi
+        if new_obs:
+            append_new_observations_to_excel(FILE_PATH, "Observed", new_obs)
 
     return pd.DataFrame(history_rows)
 
@@ -282,23 +314,23 @@ def main() -> None:
 
     # Load initial observations (from one of the Mid_Z_Init_T* sheets)
     init_indices = read_index_list(FILE_PATH, sheet_name=INIT_SHEET, column_name="indices_1based")
-    indices_obs, eff_obs, _df = load_index_eff(FILE_PATH, sheet_name=INIT_SHEET)
+    indices_obs, eff_obs, _df = load_index_eff(FILE_PATH, sheet_name="Observed")
 
     # Build LUT for seeding the GP (initial observations must be in observed cache)
     lut = dict(zip(indices_obs, eff_obs))
     available = set(lut.keys())
 
-    bo = build_bo(Input, kappa=2.0)
+    bo = build_bo(Input, kappa=1.96)
     initialize_bo(bo, init_indices, lut, available)
 
     var_names = ["Index", "MOS", "CORE", "DIO", "Freq", "Ind"]
 
-    # --- Device index maps (edit to match your Input sheet values) ---
-    # These map 1-based x1/x2/x3 indices to part-number strings for SIMBA
-    # Example maps — replace with actual values from your Input sheet:
-    q1_map: Dict[int, str] = {}   # MOSFET: {1: "C3M0040120K1", 2: ..., ...}
-    q2_map: Dict[int, str] = {}   # Core:   {1: "KAM184-075A", ...}
-    q3_map: Dict[int, str] = {}   # Diode:  {1: "C4D20120D", ...}
+    # Load device index maps from the Input sheet
+    df_input = pd.read_excel(FILE_PATH, sheet_name="Input")
+    df_input = df_input.dropna(subset=["Order"])
+    q1_map = dict(zip(df_input["Order"], df_input["x1"]))
+    q2_map = dict(zip(df_input["Order"], df_input["x2"]))
+    q3_map = dict(zip(df_input["Order"], df_input["x3"]))
 
     hist = run_near_optimal_screening(
         bo,
@@ -309,8 +341,8 @@ def main() -> None:
         indices_obs=indices_obs,
         out_dir=OUT_DIR,
         max_steps=4000,
-        kappa_screen=2.0,
-        policy_kappa=2.0,
+        kappa_screen=1.96,
+        policy_kappa=1.96,
         plot_secondary="ucb",
         n_init=len(init_indices),
         q1_map=q1_map,
@@ -319,7 +351,7 @@ def main() -> None:
     )
     hist.to_csv(os.path.join(OUT_DIR, "screening_history.csv"), index=False)
 
-    confirmed, predicted = summarize_near_optimal(bo, eps=EPS, kappa_screen=2.0)
+    confirmed, predicted = summarize_near_optimal(bo, eps=EPS, kappa_screen=1.96)
     print("\nConfirmed near-optimal (observed):")
     print(confirmed)
     print("\nPredicted near-optimal (unobserved):")

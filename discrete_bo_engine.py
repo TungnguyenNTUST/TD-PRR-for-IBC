@@ -23,7 +23,7 @@ class DiscreteBO:
         sigma_n2: float = 1e-6,                    # noise variance
         ei_acq: bool = True,
         xi: float = 0.01,                          # EI exploration parameter
-        kappa: float = 2,
+        kappa: float = 1.96,
         normalize_y: bool = True,
         random_state: Optional[int] = None,
         allow_hyperparam_optimization: bool = False,
@@ -296,7 +296,7 @@ class DiscreteBO:
             self,
             candidate_indices_1based: np.ndarray,
             policy: str = "ucb",  # "mu", "std", "ucb"
-            kappa: float = 2.0,
+            kappa: float = 1.96,
     ) -> int:
         """
         Choose one index_1based from a provided subset of candidates (must be unobserved).
@@ -331,7 +331,7 @@ class DiscreteBO:
 
         return best_local + 1
 
-    def compute_Xp_candidates(self, eps, use_ucb=True, kappa=2.0,available_1based=None):
+    def compute_Xp_candidates(self, eps, use_ucb=True, kappa=1.96,available_1based=None):
         if self._gp is None:
             raise RuntimeError("Model not fitted. Call initialize() first.")
         mu, std = self.predict_all()

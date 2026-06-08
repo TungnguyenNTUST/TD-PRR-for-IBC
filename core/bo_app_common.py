@@ -72,7 +72,7 @@ def build_bo(
     sigma_n2: float = 0.05 ** 2,
     ei_acq: bool = False,
     xi: float = 0.01,
-    kappa: float = 2.0,
+    kappa: float = 1.96,
     normalize_y: bool = True,
     random_state: int = 0,
     allow_hyperparam_optimization: bool = False,
@@ -146,7 +146,7 @@ def run_fixed_bo(
         y = float(evaluate_fn(idx, x))
         bo.tell(idx, y)
 
-        Xp, _, _ = bo.compute_Xp_candidates(eps=eps, use_ucb=True, kappa=2.0)
+        Xp, _, _ = bo.compute_Xp_candidates(eps=eps, use_ucb=True, kappa=1.96)
         row = log_step(
             bo=bo,
             step=it,
