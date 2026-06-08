@@ -1,0 +1,24 @@
+run_bo_lut.py                 ← entry point (LUT mode)
+run_bo_simba.py               ← entry point (SIMBA simulation)
+
+discrete_bo_engine.py         ← core GP/BO class
+bo_lut_evaluator.py           ← load & query LUT
+bo_gp_reporter.py             ← metrics logging & plots
+bo_decode_helpers.py          ← decode design variable indices
+
+bo_input_matrix_builder.py    ← build feature matrix (run once)
+initial_seed_generator.py     ← cluster space, pick initial seeds
+initial_condition_evaluator.py← evaluate SIMBA for initial points
+
+simba_efficiency_evaluator.py ← SIMBA simulation wrapper
+inductor_loss_model.py        ← inductor loss model
+
+excel_data_handler.py         ← Excel I/O & normalisation
+gp_kernel_tuner.py            ← learn GP kernel length scales
+lut_sheet_generator.py        ← clone LUT Excel sheets
+
+core/
+  paths.py                    ← all project paths (single source)
+  constants.py                ← physical constants
+  bo_app_common.py            ← shared BO app helpers
+  clustering_utils.py         ← clustering utilities
