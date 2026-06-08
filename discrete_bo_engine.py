@@ -297,9 +297,11 @@ class DiscreteBO:
             candidate_indices_1based: np.ndarray,
             policy: str = "ucb",  # "mu", "std", "ucb"
             kappa: float = 1.96,
+            precomputed_mu_std: Optional[Tuple[np.ndarray, np.ndarray]] = None,
     ) -> int:
         """
         Choose one index_1based from a provided subset of candidates (must be unobserved).
+        Supports using precomputed mean and std to avoid redundant predictions.
         """
         if self._gp is None:
             raise RuntimeError("Model not fitted. Call initialize() first.")
@@ -312,12 +314,16 @@ class DiscreteBO:
         chosen = set(self._chosen_idx)
         idx0 = np.array([i for i in idx0 if i not in chosen], dtype=int)
 
-        # idx0 = np.array([i for i in idx0 if i not in set(self._chosen_idx)], dtype=int)
         if idx0.size == 0:
             raise RuntimeError("No unobserved candidates in the provided subset.")
 
-        Xq = self.Xc[idx0, :]
-        mu, std = self._gp.predict(Xq, return_std=True)
+        if precomputed_mu_std is not None:
+            mu_all, std_all = precomputed_mu_std
+            mu = mu_all[idx0]
+            std = std_all[idx0]
+        else:
+            Xq = self.Xc[idx0, :]
+            mu, std = self._gp.predict(Xq, return_std=True)
 
         if policy == "mu":
             best_local = int(idx0[np.argmax(mu)])
@@ -331,12 +337,31 @@ class DiscreteBO:
 
         return best_local + 1
 
-    def compute_Xp_candidates(self, eps, use_ucb=True, kappa=1.96,available_1based=None):
+    def compute_Xp_candidates(self, eps, use_ucb=True, kappa=1.96, available_1based=None):
         if self._gp is None:
             raise RuntimeError("Model not fitted. Call initialize() first.")
-        mu, std = self.predict_all()
+
+        # 1. Predict mean only for all candidates (extremely fast)
+        mu = self._gp.predict(self.Xc, return_std=False)
         y_best = np.max(self._y_obs)
         target = y_best - eps
+
+        # 2. Compute maximum possible standard deviation (scaled back to original scale if needed)
+        std_max = np.sqrt(self.sigma_f2 + self.sigma_n2)
+        if self.normalize_y and hasattr(self._gp, "_y_train_std"):
+            std_max = std_max * self._gp._y_train_std
+
+        # 3. Filter candidates that could possibly meet the threshold
+        threshold = (target - float(kappa) * std_max) if use_ucb else target
+        possible_mask = mu >= threshold
+
+        std = np.zeros(self.N)
+        if np.any(possible_mask):
+            # 4. Predict mean & std only for the candidate subset
+            X_possible = self.Xc[possible_mask, :]
+            mu_possible, std_possible = self._gp.predict(X_possible, return_std=True)
+            mu[possible_mask] = mu_possible
+            std[possible_mask] = std_possible
 
         mask = self._unobserved_mask()
         if available_1based is not None:
@@ -344,7 +369,7 @@ class DiscreteBO:
             mask = mask & avail_mask
 
         score = (mu + float(kappa) * std) if use_ucb else mu
-        idx1 = np.where(mask & (score >= target))[0] + 1
+        idx1 = np.where(mask & possible_mask & (score >= target))[0] + 1
         return idx1, mu, std
 
 

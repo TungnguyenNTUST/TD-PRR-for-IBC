@@ -36,7 +36,7 @@ from core.paths import FILE_PATH, OUT_DIR_PAPER01 as OUT_DIR, OUT_MU_STD
 
 INPUT_SHEET = "Mid_Input_encoding"
 INDEX_SHEET = "Mid_Input_Indexing"
-INIT_SHEET  = "Mid_Z_Init_T1"
+INIT_SHEET  = "Mid_Z_Init_T3"
 
 EPS = 0.000000001
 
@@ -137,7 +137,12 @@ def run_near_optimal_screening(
                 print(f"[saved] {OUT_MU_STD}")
                 break
 
-            idx_next = bo.suggest_next_within_indices(Xp, policy="ucb", kappa=policy_kappa)
+            idx_next = bo.suggest_next_within_indices(
+                Xp, 
+                policy="ucb", 
+                kappa=policy_kappa, 
+                precomputed_mu_std=(mu_all, std_all)
+            )
 
             # --- evaluate: cache first, then live simulation ---
             matches = (indices_obs == idx_next)
