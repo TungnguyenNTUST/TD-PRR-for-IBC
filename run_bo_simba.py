@@ -339,7 +339,7 @@ def main() -> None:
         var_names=var_names,
         eff_obs=eff_obs,
         indices_obs=indices_obs,
-        out_dir=OUT_DIR,
+        out_dir=None,
         max_steps=4000,
         kappa_screen=1.96,
         policy_kappa=1.96,
