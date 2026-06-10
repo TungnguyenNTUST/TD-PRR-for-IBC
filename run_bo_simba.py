@@ -36,7 +36,7 @@ from core.paths import FILE_PATH, OUT_DIR_PAPER01 as OUT_DIR, OUT_MU_STD
 
 INPUT_SHEET = "Mid_Input_encoding"
 INDEX_SHEET = "Mid_Input_Indexing"
-INIT_SHEET  = "Mid_Z_Init_T3"
+INIT_SHEET  = "Mid_Z_Init_T5"
 
 EPS = 0.000000001
 
