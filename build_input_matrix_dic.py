@@ -195,8 +195,6 @@ def build_device_dist_table(
     if missing_feats:
         raise ValueError(f"Block {block_id}: missing feature columns {missing_feats}")
 
-    n_devices = len(df_block)
-    K = len(dic_indices)
     w = np.array(weights, dtype=float)
 
     # Feature matrix for all devices in this block: (n_devices, n_feats)
@@ -236,11 +234,7 @@ def build_encoding_matrix(
 
     z_index columns: [Order, x1, x2, x3, x4, x5]
     """
-    N = z_index.shape[0]
     blocks_ordered = sorted(BLOCK_TO_X_COL.keys())   # [1, 2, 3]
-
-    # Map Q name -> block id: Q1->1, Q2->2, Q3->3
-    q_to_block = {f"Q{b}": b for b in blocks_ordered}
 
     enc_blocks: list[np.ndarray] = []
     headers: list[str] = []
@@ -379,6 +373,11 @@ def main() -> None:
     print("[STEP 4] Syncing Mid_Input_Indexing from original -> DIC file...")
     copy_sheet_to_dic(FILE_PATH, excel_path, SHEET_INDEX)
     z_index = load_z_index(FILE_PATH)
+
+    print("[STEP 4b] Syncing Observed from original -> DIC file (initial snapshot only)...")
+    copy_sheet_to_dic(FILE_PATH, excel_path, "Observed")
+    df_obs_check = pd.read_excel(excel_path, sheet_name="Observed")
+    print(f"  DIC Observed now has {len(df_obs_check)} rows")
     print(f"  Z_index shape: {z_index.shape}  ({z_index.shape[0]} design options)")
 
     # Save Z_index .npy cache

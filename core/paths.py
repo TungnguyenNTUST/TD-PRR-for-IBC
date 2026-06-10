@@ -21,9 +21,16 @@ FILE_PATH_DIC = os.path.join(PROJECT_ROOT, "UserProvidedDataFile_DIC.xlsx")
 RESULT_PATH   = os.path.join(PROJECT_ROOT, "Data", "20260108_41_efficiency_results.xlsx")
 
 # ── Output directories ────────────────────────────────────────────────────────
-OUT_DIR         = os.path.join(PROJECT_ROOT, "Results")
-OUT_DIR_PAPER01 = os.path.join(PROJECT_ROOT, "Results", "Paper01")
-OUT_MU_STD      = os.path.join(OUT_DIR_PAPER01, "Mu_and_Std.xlsx")
+OUT_DIR             = os.path.join(PROJECT_ROOT, "Results")
+OUT_DIR_PAPER01     = os.path.join(PROJECT_ROOT, "Results", "Paper01")
+OUT_MU_STD          = os.path.join(OUT_DIR_PAPER01, "Mu_and_Std.xlsx")
+
+OUT_DIR_PAPER01_DIC = os.path.join(PROJECT_ROOT, "Results", "Paper01_DIC")
+OUT_MU_STD_DIC      = os.path.join(OUT_DIR_PAPER01_DIC, "Mu_and_Std.xlsx")
+
+# ── DIC encoding cache (.npy) ─────────────────────────────────────────────────
+CACHE_INPUT_DIC = os.path.join(PROJECT_ROOT, "Mid_Input_encoding_DIC.npy")
+CACHE_INDEX_DIC = os.path.join(PROJECT_ROOT, "Mid_Input_Indexing_DIC.npy")
 
 # ── SIMBA simulation files ────────────────────────────────────────────────────
 SIM_ROOT_DIR     = os.path.join(PROJECT_ROOT, "Simulation File")
