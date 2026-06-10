@@ -16,8 +16,9 @@ import os
 PROJECT_ROOT = r"C:\Users\Tungtan\PycharmProjects\AutomationDesign"
 
 # ── Input / data files ────────────────────────────────────────────────────────
-FILE_PATH   = os.path.join(PROJECT_ROOT, "UserProvidedDataFile.xlsx")
-RESULT_PATH = os.path.join(PROJECT_ROOT, "Data", "20260108_41_efficiency_results.xlsx")
+FILE_PATH     = os.path.join(PROJECT_ROOT, "UserProvidedDataFile.xlsx")
+FILE_PATH_DIC = os.path.join(PROJECT_ROOT, "UserProvidedDataFile_DIC.xlsx")
+RESULT_PATH   = os.path.join(PROJECT_ROOT, "Data", "20260108_41_efficiency_results.xlsx")
 
 # ── Output directories ────────────────────────────────────────────────────────
 OUT_DIR         = os.path.join(PROJECT_ROOT, "Results")
